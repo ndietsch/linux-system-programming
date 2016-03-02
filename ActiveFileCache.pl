@@ -17,9 +17,11 @@ while() {
 
 	# Get memory statistics after creating and reading a 5MB file, watch Active(file) grow until it is 5MB
 	%mem = get_mem_info;
+	my $time = localtime;
+	printf("%s\n",$time);
 	printf("%-20s\t%s\n","Active(file)",$mem{"Active(file)"});
 	printf("%-20s\t%s\n","Inactive(file)",$mem{"Inactive(file)"});
-	printf("%-20s\t%s\n","MemFree",$mem{"MemFree"});
+	printf("%-20s\t%s\n\n","MemFree",$mem{"MemFree"});
 }
 	
 

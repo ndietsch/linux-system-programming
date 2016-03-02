@@ -1,0 +1,1575 @@
+Script started on Wed 02 Mar 2016 06:06:33 AM UTC
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[?1034h[ec2-user@ip-172-31-37-189 linux-systems-programming]$ cat inro[K[Ktro [K[Ko; sleep 30
+* This screencast is to demonstrate the cache eviction feature of the Linux Virtual Memory Management subsystem. 
+* In this example, our Perl code creates a 10MB file with DD and then reads it into a loop. 
+* The loop outputs three figures each time
+	- MemFree
+	- Active (File) which makes up the active part of the file cache
+	- Inactive (File) which makes up the inactive part of the file cache
+* As you can see from the /proc/meminfo output, we start with a relatively high amount of free memory on our 1GB system and a low amount of filesystem cache
+* With each loop, the free memory decreases by about 10MB and the Active file cache increases by about 10MB. 
+* Once we hit around 9-11MB free on the system, the VM subsystem automatically moves the cache from active to inactive where it is then evicted using the various algorithms
+* Please note that this is using Amazon Linux with Kernel 4.1.17-22.30.amzn1.x86_64 which will differ slightly from the internal Linux systems at ${work} but it demonstrates the point none the less.
+* The really cool bit is at the end when we delete all the files
+
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ cat /proc/meminfo 
+MemTotal:        1019444 kB
+MemFree:          934832 kB
+MemAvailable:     969936 kB
+Buffers:            1024 kB
+Cached:            16828 kB
+SwapCached:            0 kB
+Active:            22168 kB
+Inactive:           9376 kB
+Active(anon):      13700 kB
+Inactive(anon):       52 kB
+Active(file):       8468 kB
+Inactive(file):     9324 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                 0 kB
+Writeback:             0 kB
+AnonPages:         13696 kB
+Mapped:             5484 kB
+Shmem:                60 kB
+Slab:              41288 kB
+SReclaimable:      31880 kB
+SUnreclaim:         9408 kB
+KernelStack:        1408 kB
+PageTables:         2356 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:      509720 kB
+Committed_AS:      62876 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2488 kB
+VmallocChunk:   34359731159 kB
+AnonHugePages:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+DirectMap4k:       22528 kB
+DirectMap2M:     1026048 kB
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ perl ActiveFileCache.pl [K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[Kcat ActiveFileCache.pl 
+use strict;
+use Linux::MemInfo;
+my %mem;
+my $count;
+# Starting values
+%mem = get_mem_info;
+printf("%-20s\t%s\n","Active(file)",$mem{"Active(file)"});
+printf("%-20s\t%s\n","Active(anon)",$mem{"Active(anon)"});
+
+while() {
+	sleep 1;
+	$count++;
+	# Create a 10MB file full of zeros and then read it to fill the Active(file) cache from /proc/meminfo
+	my $retval=system("/bin/dd if=/dev/zero of=/tmp/file.${count} count=20480 > /dev/null 2>&1");
+	open(my $fh, "</tmp/${count}");
+	while ( <$fh>){}
+
+	# Get memory statistics after creating and reading a 5MB file, watch Active(file) grow until it is 5MB
+	%mem = get_mem_info;
+	my $time = localtime;
+	printf("%s\n",$time);
+	printf("%-20s\t%s\n","Active(file)",$mem{"Active(file)"});
+	printf("%-20s\t%s\n","Inactive(file)",$mem{"Inactive(file)"});
+	printf("%-20s\t%s\n\n","MemFree",$mem{"MemFree"});
+}
+	
+
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ perl ActiveFileCache.pl 
+Active(file)        	8508
+Active(anon)        	14332
+Wed Mar  2 06:07:54 2016
+Active(file)        	18780
+Inactive(file)      	9284
+MemFree             	923476
+
+Wed Mar  2 06:07:55 2016
+Active(file)        	29000
+Inactive(file)      	9268
+MemFree             	913068
+
+Wed Mar  2 06:07:56 2016
+Active(file)        	39276
+Inactive(file)      	9272
+MemFree             	902536
+
+Wed Mar  2 06:07:57 2016
+Active(file)        	49504
+Inactive(file)      	9272
+MemFree             	891980
+
+Wed Mar  2 06:07:58 2016
+Active(file)        	59720
+Inactive(file)      	9272
+MemFree             	881572
+
+Wed Mar  2 06:07:59 2016
+Active(file)        	69984
+Inactive(file)      	9272
+MemFree             	871016
+
+Wed Mar  2 06:08:00 2016
+Active(file)        	80244
+Inactive(file)      	9272
+MemFree             	860360
+
+Wed Mar  2 06:08:01 2016
+Active(file)        	90448
+Inactive(file)      	9272
+MemFree             	849952
+
+Wed Mar  2 06:08:02 2016
+Active(file)        	100712
+Inactive(file)      	9272
+MemFree             	839520
+
+Wed Mar  2 06:08:03 2016
+Active(file)        	110964
+Inactive(file)      	9272
+MemFree             	828988
+
+Wed Mar  2 06:08:04 2016
+Active(file)        	121208
+Inactive(file)      	9272
+MemFree             	818548
+
+Wed Mar  2 06:08:05 2016
+Active(file)        	131428
+Inactive(file)      	9272
+MemFree             	808012
+
+Wed Mar  2 06:08:06 2016
+Active(file)        	141692
+Inactive(file)      	9272
+MemFree             	797480
+
+Wed Mar  2 06:08:07 2016
+Active(file)        	151932
+Inactive(file)      	9272
+MemFree             	787020
+
+Wed Mar  2 06:08:08 2016
+Active(file)        	162160
+Inactive(file)      	9272
+MemFree             	776484
+
+Wed Mar  2 06:08:09 2016
+Active(file)        	172400
+Inactive(file)      	9272
+MemFree             	765924
+
+Wed Mar  2 06:08:10 2016
+Active(file)        	182624
+Inactive(file)      	9272
+MemFree             	755392
+
+Wed Mar  2 06:08:12 2016
+Active(file)        	192888
+Inactive(file)      	9272
+MemFree             	744960
+
+Wed Mar  2 06:08:13 2016
+Active(file)        	203128
+Inactive(file)      	9272
+MemFree             	734404
+
+Wed Mar  2 06:08:14 2016
+Active(file)        	213380
+Inactive(file)      	9272
+MemFree             	723996
+
+Wed Mar  2 06:08:15 2016
+Active(file)        	223620
+Inactive(file)      	9272
+MemFree             	713440
+
+Wed Mar  2 06:08:16 2016
+Active(file)        	233880
+Inactive(file)      	9272
+MemFree             	702908
+
+Wed Mar  2 06:08:17 2016
+Active(file)        	244108
+Inactive(file)      	9272
+MemFree             	692476
+
+Wed Mar  2 06:08:18 2016
+Active(file)        	254360
+Inactive(file)      	9272
+MemFree             	681940
+
+Wed Mar  2 06:08:19 2016
+Active(file)        	264576
+Inactive(file)      	9272
+MemFree             	671284
+
+Wed Mar  2 06:08:20 2016
+Active(file)        	274840
+Inactive(file)      	9272
+MemFree             	660884
+
+Wed Mar  2 06:08:21 2016
+Active(file)        	285052
+Inactive(file)      	9272
+MemFree             	650352
+
+Wed Mar  2 06:08:22 2016
+Active(file)        	295316
+Inactive(file)      	9272
+MemFree             	639792
+
+Wed Mar  2 06:08:23 2016
+Active(file)        	305532
+Inactive(file)      	9272
+MemFree             	629384
+
+Wed Mar  2 06:08:24 2016
+Active(file)        	318796
+Inactive(file)      	7160
+MemFree             	617968
+
+Wed Mar  2 06:08:25 2016
+Active(file)        	329052
+Inactive(file)      	7152
+MemFree             	607448
+
+Wed Mar  2 06:08:26 2016
+Active(file)        	339288
+Inactive(file)      	7152
+MemFree             	597016
+
+Wed Mar  2 06:08:27 2016
+Active(file)        	349528
+Inactive(file)      	7152
+MemFree             	586460
+
+Wed Mar  2 06:08:28 2016
+Active(file)        	359780
+Inactive(file)      	7152
+MemFree             	576036
+
+Wed Mar  2 06:08:29 2016
+Active(file)        	370020
+Inactive(file)      	7152
+MemFree             	565536
+
+Wed Mar  2 06:08:30 2016
+Active(file)        	380272
+Inactive(file)      	7152
+MemFree             	555004
+
+Wed Mar  2 06:08:31 2016
+Active(file)        	390508
+Inactive(file)      	7152
+MemFree             	544448
+
+Wed Mar  2 06:08:32 2016
+Active(file)        	400724
+Inactive(file)      	7152
+MemFree             	533916
+
+Wed Mar  2 06:08:33 2016
+Active(file)        	410988
+Inactive(file)      	7152
+MemFree             	523360
+
+Wed Mar  2 06:08:34 2016
+Active(file)        	421228
+Inactive(file)      	7156
+MemFree             	512928
+
+Wed Mar  2 06:08:35 2016
+Active(file)        	431480
+Inactive(file)      	7156
+MemFree             	502396
+
+Wed Mar  2 06:08:36 2016
+Active(file)        	441716
+Inactive(file)      	7156
+MemFree             	491840
+
+Wed Mar  2 06:08:37 2016
+Active(file)        	451932
+Inactive(file)      	7156
+MemFree             	481432
+
+Wed Mar  2 06:08:38 2016
+Active(file)        	462200
+Inactive(file)      	7156
+MemFree             	470904
+
+Wed Mar  2 06:08:39 2016
+Active(file)        	472424
+Inactive(file)      	7156
+MemFree             	460432
+
+Wed Mar  2 06:08:40 2016
+Active(file)        	482688
+Inactive(file)      	7156
+MemFree             	449892
+
+Wed Mar  2 06:08:41 2016
+Active(file)        	492936
+Inactive(file)      	7156
+MemFree             	439476
+
+Wed Mar  2 06:08:42 2016
+Active(file)        	503176
+Inactive(file)      	7156
+MemFree             	428936
+
+Wed Mar  2 06:08:43 2016
+Active(file)        	513416
+Inactive(file)      	7156
+MemFree             	418380
+
+Wed Mar  2 06:08:44 2016
+Active(file)        	523656
+Inactive(file)      	7156
+MemFree             	407856
+
+Wed Mar  2 06:08:46 2016
+Active(file)        	533896
+Inactive(file)      	7156
+MemFree             	397440
+
+Wed Mar  2 06:08:47 2016
+Active(file)        	544144
+Inactive(file)      	7156
+MemFree             	386900
+
+Wed Mar  2 06:08:48 2016
+Active(file)        	554384
+Inactive(file)      	7156
+MemFree             	376484
+
+Wed Mar  2 06:08:49 2016
+Active(file)        	564624
+Inactive(file)      	7156
+MemFree             	365944
+
+Wed Mar  2 06:08:50 2016
+Active(file)        	574864
+Inactive(file)      	7156
+MemFree             	355280
+
+Wed Mar  2 06:08:51 2016
+Active(file)        	585108
+Inactive(file)      	7164
+MemFree             	344864
+
+Wed Mar  2 06:08:52 2016
+Active(file)        	595356
+Inactive(file)      	7164
+MemFree             	334324
+
+Wed Mar  2 06:08:53 2016
+Active(file)        	605596
+Inactive(file)      	7164
+MemFree             	323908
+
+Wed Mar  2 06:08:54 2016
+Active(file)        	615836
+Inactive(file)      	7164
+MemFree             	313368
+
+Wed Mar  2 06:08:55 2016
+Active(file)        	626076
+Inactive(file)      	7164
+MemFree             	302828
+
+Wed Mar  2 06:08:56 2016
+Active(file)        	636324
+Inactive(file)      	7156
+MemFree             	292396
+
+Wed Mar  2 06:08:57 2016
+Active(file)        	646572
+Inactive(file)      	7156
+MemFree             	281840
+
+Wed Mar  2 06:08:58 2016
+Active(file)        	656812
+Inactive(file)      	7156
+MemFree             	271268
+
+Wed Mar  2 06:08:59 2016
+Active(file)        	667052
+Inactive(file)      	7156
+MemFree             	260712
+
+Wed Mar  2 06:09:00 2016
+Active(file)        	677292
+Inactive(file)      	7156
+MemFree             	250140
+
+Wed Mar  2 06:09:01 2016
+Active(file)        	687532
+Inactive(file)      	7156
+MemFree             	239708
+
+Wed Mar  2 06:09:02 2016
+Active(file)        	697780
+Inactive(file)      	7156
+MemFree             	229136
+
+Wed Mar  2 06:09:03 2016
+Active(file)        	708020
+Inactive(file)      	7156
+MemFree             	218704
+
+Wed Mar  2 06:09:04 2016
+Active(file)        	718260
+Inactive(file)      	7156
+MemFree             	208132
+
+Wed Mar  2 06:09:05 2016
+Active(file)        	728500
+Inactive(file)      	7156
+MemFree             	197700
+
+Wed Mar  2 06:09:06 2016
+Active(file)        	738752
+Inactive(file)      	7156
+MemFree             	187128
+
+Wed Mar  2 06:09:07 2016
+Active(file)        	749000
+Inactive(file)      	7156
+MemFree             	176448
+
+Wed Mar  2 06:09:08 2016
+Active(file)        	759240
+Inactive(file)      	7156
+MemFree             	166000
+
+Wed Mar  2 06:09:09 2016
+Active(file)        	769480
+Inactive(file)      	7156
+MemFree             	155444
+
+Wed Mar  2 06:09:10 2016
+Active(file)        	779720
+Inactive(file)      	7156
+MemFree             	145012
+
+Wed Mar  2 06:09:11 2016
+Active(file)        	789952
+Inactive(file)      	7160
+MemFree             	134440
+
+Wed Mar  2 06:09:12 2016
+Active(file)        	800208
+Inactive(file)      	7160
+MemFree             	123884
+
+Wed Mar  2 06:09:13 2016
+Active(file)        	810448
+Inactive(file)      	7160
+MemFree             	113436
+
+Wed Mar  2 06:09:14 2016
+Active(file)        	820688
+Inactive(file)      	7160
+MemFree             	102880
+
+Wed Mar  2 06:09:15 2016
+Active(file)        	830928
+Inactive(file)      	7160
+MemFree             	92308
+
+Wed Mar  2 06:09:16 2016
+Active(file)        	841180
+Inactive(file)      	7160
+MemFree             	81752
+
+Wed Mar  2 06:09:17 2016
+Active(file)        	851428
+Inactive(file)      	7160
+MemFree             	71180
+
+Wed Mar  2 06:09:18 2016
+Active(file)        	861668
+Inactive(file)      	7160
+MemFree             	60748
+
+Wed Mar  2 06:09:20 2016
+Active(file)        	871908
+Inactive(file)      	7160
+MemFree             	50176
+
+Wed Mar  2 06:09:21 2016
+Active(file)        	882148
+Inactive(file)      	7160
+MemFree             	39744
+
+Wed Mar  2 06:09:22 2016
+Active(file)        	892388
+Inactive(file)      	7160
+MemFree             	29172
+
+Wed Mar  2 06:09:23 2016
+Active(file)        	902636
+Inactive(file)      	7160
+MemFree             	18616
+
+^C
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ echo "Once we hit aboit 9MB free, the system will start moving the file data fromt he active cache to the inactive cache. From there it is [K[K[Kwill evict the data, e nsuring Linux always has enough g[K[K free memory for OS and applications[K[Kns"
+Once we hit aboit 9MB free, the system will start moving the file data fromt he active cache to the inactive cache. From there it will evict the data, ensuring Linux always has enough free memory for OS and applications
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ echo "Once we hit aboit 9MB free, the system will start moving the file data fromt he active cache to the inactive cache. From there it will evict the data, ennsuring Linux always has enough free memory for OS and applications"[Aperl ActiveFileCache.pl [K
+[K[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C
+Active(file)        	902680
+Active(anon)        	14344
+Wed Mar  2 06:10:13 2016
+Active(file)        	902676
+Inactive(file)      	7164
+MemFree             	18476
+
+Wed Mar  2 06:10:14 2016
+Active(file)        	902688
+Inactive(file)      	7164
+MemFree             	18480
+
+Wed Mar  2 06:10:15 2016
+Active(file)        	902652
+Inactive(file)      	7164
+MemFree             	18480
+
+Wed Mar  2 06:10:16 2016
+Active(file)        	902676
+Inactive(file)      	7164
+MemFree             	18480
+
+Wed Mar  2 06:10:17 2016
+Active(file)        	902688
+Inactive(file)      	7164
+MemFree             	18480
+
+Wed Mar  2 06:10:18 2016
+Active(file)        	902688
+Inactive(file)      	7164
+MemFree             	18504
+
+Wed Mar  2 06:10:20 2016
+Active(file)        	902684
+Inactive(file)      	7164
+MemFree             	18500
+
+Wed Mar  2 06:10:21 2016
+Active(file)        	902696
+Inactive(file)      	7164
+MemFree             	18500
+
+Wed Mar  2 06:10:22 2016
+Active(file)        	902708
+Inactive(file)      	7164
+MemFree             	18500
+
+Wed Mar  2 06:10:23 2016
+Active(file)        	902696
+Inactive(file)      	7164
+MemFree             	18476
+
+Wed Mar  2 06:10:24 2016
+Active(file)        	902684
+Inactive(file)      	7164
+MemFree             	18500
+
+Wed Mar  2 06:10:25 2016
+Active(file)        	902716
+Inactive(file)      	7164
+MemFree             	18476
+
+Wed Mar  2 06:10:26 2016
+Active(file)        	902716
+Inactive(file)      	7164
+MemFree             	18488
+
+Wed Mar  2 06:10:27 2016
+Active(file)        	902680
+Inactive(file)      	7168
+MemFree             	18484
+
+Wed Mar  2 06:10:28 2016
+Active(file)        	902692
+Inactive(file)      	7168
+MemFree             	18480
+
+Wed Mar  2 06:10:29 2016
+Active(file)        	902728
+Inactive(file)      	7168
+MemFree             	18380
+
+Wed Mar  2 06:10:30 2016
+Active(file)        	902724
+Inactive(file)      	7168
+MemFree             	18480
+
+Wed Mar  2 06:10:31 2016
+Active(file)        	902712
+Inactive(file)      	7168
+MemFree             	18380
+
+Wed Mar  2 06:10:32 2016
+Active(file)        	902712
+Inactive(file)      	7168
+MemFree             	18516
+
+Wed Mar  2 06:10:33 2016
+Active(file)        	902724
+Inactive(file)      	7168
+MemFree             	18376
+
+Wed Mar  2 06:10:34 2016
+Active(file)        	902736
+Inactive(file)      	7168
+MemFree             	18400
+
+Wed Mar  2 06:10:35 2016
+Active(file)        	902732
+Inactive(file)      	7168
+MemFree             	18500
+
+Wed Mar  2 06:10:36 2016
+Active(file)        	902744
+Inactive(file)      	7168
+MemFree             	18376
+
+Wed Mar  2 06:10:37 2016
+Active(file)        	902708
+Inactive(file)      	7168
+MemFree             	18488
+
+Wed Mar  2 06:10:38 2016
+Active(file)        	902720
+Inactive(file)      	7168
+MemFree             	18360
+
+Wed Mar  2 06:10:39 2016
+Active(file)        	902744
+Inactive(file)      	7168
+MemFree             	18484
+
+Wed Mar  2 06:10:40 2016
+Active(file)        	902716
+Inactive(file)      	7168
+MemFree             	18484
+
+^C
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ df -h /
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/xvda1      7.8G  2.2G  5.5G  29% /
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ rm /tmp/file*
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ rm /tmp/file*[6Pdf -h /perl ActiveFileCache.pl 
+Active(file)        	11884
+Active(anon)        	14368
+Wed Mar  2 06:10:52 2016
+Active(file)        	22096
+Inactive(file)      	7260
+MemFree             	921944
+
+Wed Mar  2 06:10:53 2016
+Active(file)        	32324
+Inactive(file)      	7260
+MemFree             	911552
+
+Wed Mar  2 06:10:54 2016
+Active(file)        	42584
+Inactive(file)      	7260
+MemFree             	901100
+
+Wed Mar  2 06:10:55 2016
+Active(file)        	52812
+Inactive(file)      	7260
+MemFree             	890580
+
+Wed Mar  2 06:10:56 2016
+Active(file)        	63076
+Inactive(file)      	7260
+MemFree             	880032
+
+Wed Mar  2 06:10:57 2016
+Active(file)        	73316
+Inactive(file)      	7260
+MemFree             	869600
+
+Wed Mar  2 06:10:58 2016
+Active(file)        	83568
+Inactive(file)      	7260
+MemFree             	859068
+
+Wed Mar  2 06:10:59 2016
+Active(file)        	93796
+Inactive(file)      	7260
+MemFree             	848512
+
+Wed Mar  2 06:11:00 2016
+Active(file)        	104056
+Inactive(file)      	7260
+MemFree             	838052
+
+Wed Mar  2 06:11:02 2016
+Active(file)        	114284
+Inactive(file)      	7260
+MemFree             	827452
+
+Wed Mar  2 06:11:03 2016
+Active(file)        	124512
+Inactive(file)      	7260
+MemFree             	816908
+
+Wed Mar  2 06:11:04 2016
+Active(file)        	134740
+Inactive(file)      	7260
+MemFree             	806500
+
+Wed Mar  2 06:11:05 2016
+Active(file)        	145004
+Inactive(file)      	7260
+MemFree             	795944
+
+Wed Mar  2 06:11:06 2016
+Active(file)        	155228
+Inactive(file)      	7260
+MemFree             	785412
+
+Wed Mar  2 06:11:07 2016
+Active(file)        	165492
+Inactive(file)      	7260
+MemFree             	774980
+
+Wed Mar  2 06:11:08 2016
+Active(file)        	175744
+Inactive(file)      	7260
+MemFree             	764424
+
+Wed Mar  2 06:11:09 2016
+Active(file)        	185960
+Inactive(file)      	7260
+MemFree             	754016
+
+Wed Mar  2 06:11:10 2016
+Active(file)        	196224
+Inactive(file)      	7264
+MemFree             	743464
+
+Wed Mar  2 06:11:11 2016
+Active(file)        	206484
+Inactive(file)      	7264
+MemFree             	733044
+
+Wed Mar  2 06:11:12 2016
+Active(file)        	216700
+Inactive(file)      	7264
+MemFree             	722484
+
+Wed Mar  2 06:11:13 2016
+Active(file)        	226964
+Inactive(file)      	7264
+MemFree             	711960
+
+Wed Mar  2 06:11:14 2016
+Active(file)        	237192
+Inactive(file)      	7264
+MemFree             	701528
+
+Wed Mar  2 06:11:15 2016
+Active(file)        	247432
+Inactive(file)      	7264
+MemFree             	690972
+
+Wed Mar  2 06:11:16 2016
+Active(file)        	257692
+Inactive(file)      	7264
+MemFree             	680440
+
+Wed Mar  2 06:11:17 2016
+Active(file)        	267920
+Inactive(file)      	7264
+MemFree             	670008
+
+Wed Mar  2 06:11:18 2016
+Active(file)        	278148
+Inactive(file)      	7264
+MemFree             	659352
+
+Wed Mar  2 06:11:19 2016
+Active(file)        	288412
+Inactive(file)      	7264
+MemFree             	648920
+
+Wed Mar  2 06:11:20 2016
+Active(file)        	298652
+Inactive(file)      	7264
+MemFree             	638364
+
+Wed Mar  2 06:11:21 2016
+Active(file)        	308900
+Inactive(file)      	7264
+MemFree             	627840
+
+Wed Mar  2 06:11:22 2016
+Active(file)        	319152
+Inactive(file)      	7264
+MemFree             	617424
+
+Wed Mar  2 06:11:23 2016
+Active(file)        	329356
+Inactive(file)      	7264
+MemFree             	606888
+
+Wed Mar  2 06:11:24 2016
+Active(file)        	339620
+Inactive(file)      	7264
+MemFree             	596452
+
+Wed Mar  2 06:11:25 2016
+Active(file)        	349872
+Inactive(file)      	7264
+MemFree             	585920
+
+Wed Mar  2 06:11:26 2016
+Active(file)        	360108
+Inactive(file)      	7264
+MemFree             	575364
+
+Wed Mar  2 06:11:27 2016
+Active(file)        	370348
+Inactive(file)      	7264
+MemFree             	564932
+
+Wed Mar  2 06:11:28 2016
+Active(file)        	380572
+Inactive(file)      	7264
+MemFree             	554400
+
+Wed Mar  2 06:11:29 2016
+Active(file)        	390828
+Inactive(file)      	7264
+MemFree             	543956
+
+Wed Mar  2 06:11:30 2016
+Active(file)        	401080
+Inactive(file)      	7264
+MemFree             	533432
+
+Wed Mar  2 06:11:31 2016
+Active(file)        	411316
+Inactive(file)      	7264
+MemFree             	522900
+
+Wed Mar  2 06:11:32 2016
+Active(file)        	421556
+Inactive(file)      	7264
+MemFree             	512316
+
+Wed Mar  2 06:11:33 2016
+Active(file)        	431808
+Inactive(file)      	7264
+MemFree             	501760
+
+Wed Mar  2 06:11:34 2016
+Active(file)        	442048
+Inactive(file)      	7264
+MemFree             	491328
+
+Wed Mar  2 06:11:36 2016
+Active(file)        	452300
+Inactive(file)      	7264
+MemFree             	480796
+
+Wed Mar  2 06:11:37 2016
+Active(file)        	462536
+Inactive(file)      	7264
+MemFree             	470364
+
+Wed Mar  2 06:11:38 2016
+Active(file)        	472776
+Inactive(file)      	7264
+MemFree             	459792
+
+Wed Mar  2 06:11:39 2016
+Active(file)        	483028
+Inactive(file)      	7264
+MemFree             	449364
+
+Wed Mar  2 06:11:40 2016
+Active(file)        	493256
+Inactive(file)      	7264
+MemFree             	438824
+
+Wed Mar  2 06:11:41 2016
+Active(file)        	503496
+Inactive(file)      	7264
+MemFree             	428284
+
+Wed Mar  2 06:11:42 2016
+Active(file)        	513744
+Inactive(file)      	7264
+MemFree             	417868
+
+Wed Mar  2 06:11:43 2016
+Active(file)        	523984
+Inactive(file)      	7264
+MemFree             	407328
+
+Wed Mar  2 06:11:44 2016
+Active(file)        	534236
+Inactive(file)      	7264
+MemFree             	396788
+
+Wed Mar  2 06:11:45 2016
+Active(file)        	544476
+Inactive(file)      	7264
+MemFree             	386248
+
+Wed Mar  2 06:11:46 2016
+Active(file)        	554716
+Inactive(file)      	7264
+MemFree             	375708
+
+Wed Mar  2 06:11:47 2016
+Active(file)        	564964
+Inactive(file)      	7268
+MemFree             	365292
+
+Wed Mar  2 06:11:48 2016
+Active(file)        	575204
+Inactive(file)      	7268
+MemFree             	354752
+
+Wed Mar  2 06:11:49 2016
+Active(file)        	585444
+Inactive(file)      	7268
+MemFree             	344336
+
+Wed Mar  2 06:11:50 2016
+Active(file)        	595684
+Inactive(file)      	7268
+MemFree             	333796
+
+Wed Mar  2 06:11:51 2016
+Active(file)        	605924
+Inactive(file)      	7268
+MemFree             	323256
+
+Wed Mar  2 06:11:52 2016
+Active(file)        	616172
+Inactive(file)      	7268
+MemFree             	312840
+
+Wed Mar  2 06:11:53 2016
+Active(file)        	626412
+Inactive(file)      	7268
+MemFree             	302176
+
+Wed Mar  2 06:11:54 2016
+Active(file)        	636664
+Inactive(file)      	7268
+MemFree             	291636
+
+Wed Mar  2 06:11:55 2016
+Active(file)        	646904
+Inactive(file)      	7268
+MemFree             	281204
+
+Wed Mar  2 06:11:56 2016
+Active(file)        	657144
+Inactive(file)      	7268
+MemFree             	270680
+
+Wed Mar  2 06:11:57 2016
+Active(file)        	667392
+Inactive(file)      	7268
+MemFree             	260264
+
+Wed Mar  2 06:11:58 2016
+Active(file)        	677632
+Inactive(file)      	7268
+MemFree             	249600
+
+Wed Mar  2 06:11:59 2016
+Active(file)        	687872
+Inactive(file)      	7268
+MemFree             	239168
+
+Wed Mar  2 06:12:00 2016
+Active(file)        	698112
+Inactive(file)      	7268
+MemFree             	228768
+
+Wed Mar  2 06:12:01 2016
+Active(file)        	708352
+Inactive(file)      	7268
+MemFree             	218212
+
+Wed Mar  2 06:12:02 2016
+Active(file)        	718584
+Inactive(file)      	7268
+MemFree             	207640
+
+Wed Mar  2 06:12:03 2016
+Active(file)        	728840
+Inactive(file)      	7268
+MemFree             	197208
+
+Wed Mar  2 06:12:04 2016
+Active(file)        	739080
+Inactive(file)      	7268
+MemFree             	186512
+
+Wed Mar  2 06:12:05 2016
+Active(file)        	749320
+Inactive(file)      	7268
+MemFree             	176080
+
+Wed Mar  2 06:12:06 2016
+Active(file)        	759560
+Inactive(file)      	7268
+MemFree             	165508
+
+Wed Mar  2 06:12:07 2016
+Active(file)        	769808
+Inactive(file)      	7268
+MemFree             	154952
+
+Wed Mar  2 06:12:08 2016
+Active(file)        	780048
+Inactive(file)      	7268
+MemFree             	144504
+
+Wed Mar  2 06:12:10 2016
+Active(file)        	790300
+Inactive(file)      	7268
+MemFree             	133948
+
+Wed Mar  2 06:12:11 2016
+Active(file)        	800540
+Inactive(file)      	7268
+MemFree             	123500
+
+Wed Mar  2 06:12:12 2016
+Active(file)        	810780
+Inactive(file)      	7268
+MemFree             	112944
+
+Wed Mar  2 06:12:13 2016
+Active(file)        	821028
+Inactive(file)      	7268
+MemFree             	102264
+
+Wed Mar  2 06:12:14 2016
+Active(file)        	831268
+Inactive(file)      	7268
+MemFree             	91816
+
+Wed Mar  2 06:12:15 2016
+Active(file)        	841508
+Inactive(file)      	7268
+MemFree             	81260
+
+Wed Mar  2 06:12:16 2016
+Active(file)        	851748
+Inactive(file)      	7268
+MemFree             	70812
+
+Wed Mar  2 06:12:17 2016
+Active(file)        	861988
+Inactive(file)      	7268
+MemFree             	60256
+
+Wed Mar  2 06:12:18 2016
+Active(file)        	872236
+Inactive(file)      	7268
+MemFree             	49684
+
+Wed Mar  2 06:12:19 2016
+Active(file)        	882476
+Inactive(file)      	7268
+MemFree             	39252
+
+Wed Mar  2 06:12:20 2016
+Active(file)        	892716
+Inactive(file)      	7268
+MemFree             	28680
+
+Wed Mar  2 06:12:21 2016
+Active(file)        	902956
+Inactive(file)      	7268
+MemFree             	18248
+
+Wed Mar  2 06:12:22 2016
+Active(file)        	809036
+Inactive(file)      	107020
+MemFree             	11916
+
+Wed Mar  2 06:12:23 2016
+Active(file)        	771108
+Inactive(file)      	148232
+MemFree             	9036
+
+Wed Mar  2 06:12:24 2016
+Active(file)        	729564
+Inactive(file)      	188620
+MemFree             	10492
+
+Wed Mar  2 06:12:25 2016
+Active(file)        	706860
+Inactive(file)      	212456
+MemFree             	9736
+
+Wed Mar  2 06:12:26 2016
+Active(file)        	685596
+Inactive(file)      	233960
+MemFree             	9868
+
+Wed Mar  2 06:12:27 2016
+Active(file)        	670300
+Inactive(file)      	250432
+MemFree             	8976
+
+Wed Mar  2 06:12:28 2016
+Active(file)        	653200
+Inactive(file)      	267188
+MemFree             	9580
+
+Wed Mar  2 06:12:29 2016
+Active(file)        	639076
+Inactive(file)      	281304
+MemFree             	9920
+
+Wed Mar  2 06:12:30 2016
+Active(file)        	625416
+Inactive(file)      	294404
+MemFree             	10756
+
+Wed Mar  2 06:12:31 2016
+Active(file)        	616904
+Inactive(file)      	304192
+MemFree             	9872
+
+Wed Mar  2 06:12:32 2016
+Active(file)        	608672
+Inactive(file)      	313408
+MemFree             	9124
+
+Wed Mar  2 06:12:33 2016
+Active(file)        	599704
+Inactive(file)      	322564
+MemFree             	9344
+
+Wed Mar  2 06:12:34 2016
+Active(file)        	591000
+Inactive(file)      	331176
+MemFree             	9680
+
+Wed Mar  2 06:12:35 2016
+Active(file)        	583512
+Inactive(file)      	338832
+MemFree             	9792
+
+Wed Mar  2 06:12:36 2016
+Active(file)        	576248
+Inactive(file)      	346064
+MemFree             	10104
+
+Wed Mar  2 06:12:37 2016
+Active(file)        	569240
+Inactive(file)      	352844
+MemFree             	10492
+
+Wed Mar  2 06:12:38 2016
+Active(file)        	564560
+Inactive(file)      	358484
+MemFree             	9840
+
+Wed Mar  2 06:12:39 2016
+Active(file)        	557864
+Inactive(file)      	364604
+MemFree             	10688
+
+Wed Mar  2 06:12:40 2016
+Active(file)        	555524
+Inactive(file)      	368920
+MemFree             	9044
+
+Wed Mar  2 06:12:41 2016
+Active(file)        	551240
+Inactive(file)      	373692
+MemFree             	8808
+
+Wed Mar  2 06:12:43 2016
+Active(file)        	542976
+Inactive(file)      	379496
+MemFree             	11272
+
+Wed Mar  2 06:12:44 2016
+Active(file)        	540932
+Inactive(file)      	383164
+MemFree             	10048
+
+Wed Mar  2 06:12:45 2016
+Active(file)        	537024
+Inactive(file)      	387208
+MemFree             	10144
+
+Wed Mar  2 06:12:46 2016
+Active(file)        	535280
+Inactive(file)      	390520
+MemFree             	8856
+
+Wed Mar  2 06:12:47 2016
+Active(file)        	531516
+Inactive(file)      	394240
+MemFree             	8960
+
+Wed Mar  2 06:12:48 2016
+Active(file)        	524960
+Inactive(file)      	398484
+MemFree             	11532
+
+Wed Mar  2 06:12:49 2016
+Active(file)        	523316
+Inactive(file)      	401304
+MemFree             	10668
+
+Wed Mar  2 06:12:50 2016
+Active(file)        	521752
+Inactive(file)      	404024
+MemFree             	9624
+
+Wed Mar  2 06:12:51 2016
+Active(file)        	518004
+Inactive(file)      	407112
+MemFree             	10488
+
+Wed Mar  2 06:12:52 2016
+Active(file)        	514676
+Inactive(file)      	409964
+MemFree             	11120
+
+Wed Mar  2 06:12:53 2016
+Active(file)        	511444
+Inactive(file)      	412676
+MemFree             	11672
+
+Wed Mar  2 06:12:54 2016
+Active(file)        	512100
+Inactive(file)      	414544
+MemFree             	9564
+
+Wed Mar  2 06:12:55 2016
+Active(file)        	510424
+Inactive(file)      	416732
+MemFree             	9240
+
+Wed Mar  2 06:12:56 2016
+Active(file)        	508612
+Inactive(file)      	418876
+MemFree             	9128
+
+Wed Mar  2 06:12:57 2016
+Active(file)        	506692
+Inactive(file)      	420960
+MemFree             	9116
+
+Wed Mar  2 06:12:58 2016
+Active(file)        	504668
+Inactive(file)      	422952
+MemFree             	9196
+
+Wed Mar  2 06:12:59 2016
+Active(file)        	500872
+Inactive(file)      	425144
+MemFree             	11028
+
+Wed Mar  2 06:13:00 2016
+Active(file)        	499932
+Inactive(file)      	426840
+MemFree             	10512
+
+Wed Mar  2 06:13:01 2016
+Active(file)        	499008
+Inactive(file)      	428456
+MemFree             	9884
+
+Wed Mar  2 06:13:02 2016
+Active(file)        	498400
+Inactive(file)      	430000
+MemFree             	8980
+
+Wed Mar  2 06:13:03 2016
+Active(file)        	494780
+Inactive(file)      	431852
+MemFree             	10976
+
+Wed Mar  2 06:13:04 2016
+Active(file)        	495772
+Inactive(file)      	433004
+MemFree             	8948
+
+Wed Mar  2 06:13:05 2016
+Active(file)        	493212
+Inactive(file)      	434544
+MemFree             	10160
+
+Wed Mar  2 06:13:06 2016
+Active(file)        	492452
+Inactive(file)      	435816
+MemFree             	9900
+
+Wed Mar  2 06:13:07 2016
+Active(file)        	491728
+Inactive(file)      	437040
+MemFree             	9624
+
+Wed Mar  2 06:13:08 2016
+Active(file)        	490696
+Inactive(file)      	438264
+MemFree             	9360
+
+^C
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ echo "At this point the systems tabl[Kilises around 490MB Active and about 430MB inactive"
+At this point the systems tabilises around 490MB Active and about 430MB inactive
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ echo " [KNow have a look at /proc/meminfo before and after I delete the files that we c[Kjust created"
+Now have a look at /proc/meminfo before and after I delete the files that we just created
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ cat /proc/meminfo
+MemTotal:        1019444 kB
+MemFree:           10420 kB
+MemAvailable:     969860 kB
+Buffers:             308 kB
+Cached:           928908 kB
+SwapCached:            0 kB
+Active:           504448 kB
+Inactive:         438452 kB
+Active(anon):      13708 kB
+Inactive(anon):       52 kB
+Active(file):     490740 kB
+Inactive(file):   438400 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                16 kB
+Writeback:             0 kB
+AnonPages:         13700 kB
+Mapped:             4392 kB
+Shmem:                60 kB
+Slab:              54276 kB
+SReclaimable:      44868 kB
+SUnreclaim:         9408 kB
+KernelStack:        1408 kB
+PageTables:         2356 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:      509720 kB
+Committed_AS:      62876 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2488 kB
+VmallocChunk:   34359731159 kB
+AnonHugePages:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+DirectMap4k:       22528 kB
+DirectMap2M:     1026048 kB
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ du -sh "[K/tmp/file*
+10M	/tmp/file.1
+10M	/tmp/file.10
+10M	/tmp/file.100
+10M	/tmp/file.101
+10M	/tmp/file.102
+10M	/tmp/file.103
+10M	/tmp/file.104
+10M	/tmp/file.105
+10M	/tmp/file.106
+10M	/tmp/file.107
+10M	/tmp/file.108
+10M	/tmp/file.109
+10M	/tmp/file.11
+10M	/tmp/file.110
+10M	/tmp/file.111
+10M	/tmp/file.112
+10M	/tmp/file.113
+10M	/tmp/file.114
+10M	/tmp/file.115
+10M	/tmp/file.116
+10M	/tmp/file.117
+10M	/tmp/file.118
+10M	/tmp/file.119
+10M	/tmp/file.12
+10M	/tmp/file.120
+10M	/tmp/file.121
+10M	/tmp/file.122
+10M	/tmp/file.123
+10M	/tmp/file.124
+10M	/tmp/file.125
+10M	/tmp/file.126
+10M	/tmp/file.127
+10M	/tmp/file.128
+10M	/tmp/file.129
+10M	/tmp/file.13
+10M	/tmp/file.130
+10M	/tmp/file.131
+10M	/tmp/file.132
+10M	/tmp/file.133
+10M	/tmp/file.14
+10M	/tmp/file.15
+10M	/tmp/file.16
+10M	/tmp/file.17
+10M	/tmp/file.18
+10M	/tmp/file.19
+10M	/tmp/file.2
+10M	/tmp/file.20
+10M	/tmp/file.21
+10M	/tmp/file.22
+10M	/tmp/file.23
+10M	/tmp/file.24
+10M	/tmp/file.25
+10M	/tmp/file.26
+10M	/tmp/file.27
+10M	/tmp/file.28
+10M	/tmp/file.29
+10M	/tmp/file.3
+10M	/tmp/file.30
+10M	/tmp/file.31
+10M	/tmp/file.32
+10M	/tmp/file.33
+10M	/tmp/file.34
+10M	/tmp/file.35
+10M	/tmp/file.36
+10M	/tmp/file.37
+10M	/tmp/file.38
+10M	/tmp/file.39
+10M	/tmp/file.4
+10M	/tmp/file.40
+10M	/tmp/file.41
+10M	/tmp/file.42
+10M	/tmp/file.43
+10M	/tmp/file.44
+10M	/tmp/file.45
+10M	/tmp/file.46
+10M	/tmp/file.47
+10M	/tmp/file.48
+10M	/tmp/file.49
+10M	/tmp/file.5
+10M	/tmp/file.50
+10M	/tmp/file.51
+10M	/tmp/file.52
+10M	/tmp/file.53
+10M	/tmp/file.54
+10M	/tmp/file.55
+10M	/tmp/file.56
+10M	/tmp/file.57
+10M	/tmp/file.58
+10M	/tmp/file.59
+10M	/tmp/file.6
+10M	/tmp/file.60
+10M	/tmp/file.61
+10M	/tmp/file.62
+10M	/tmp/file.63
+10M	/tmp/file.64
+10M	/tmp/file.65
+10M	/tmp/file.66
+10M	/tmp/file.67
+10M	/tmp/file.68
+10M	/tmp/file.69
+10M	/tmp/file.7
+10M	/tmp/file.70
+10M	/tmp/file.71
+10M	/tmp/file.72
+10M	/tmp/file.73
+10M	/tmp/file.74
+10M	/tmp/file.75
+10M	/tmp/file.76
+10M	/tmp/file.77
+10M	/tmp/file.78
+10M	/tmp/file.79
+10M	/tmp/file.8
+10M	/tmp/file.80
+10M	/tmp/file.81
+10M	/tmp/file.82
+10M	/tmp/file.83
+10M	/tmp/file.84
+10M	/tmp/file.85
+10M	/tmp/file.86
+10M	/tmp/file.87
+10M	/tmp/file.88
+10M	/tmp/file.89
+10M	/tmp/file.9
+10M	/tmp/file.90
+10M	/tmp/file.91
+10M	/tmp/file.92
+10M	/tmp/file.93
+10M	/tmp/file.94
+10M	/tmp/file.95
+10M	/tmp/file.96
+10M	/tmp/file.97
+10M	/tmp/file.98
+10M	/tmp/file.99
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ rm /tmp/file*
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ rm /tmp/file*[4@du -sh[C[C[C[C[C[C[C[C[C[C[Ccat /proc/meminfo
+MemTotal:        1019444 kB
+MemFree:          957192 kB
+MemAvailable:     971072 kB
+Buffers:             448 kB
+Cached:             6792 kB
+SwapCached:            0 kB
+Active:            20508 kB
+Inactive:            424 kB
+Active(anon):      13708 kB
+Inactive(anon):       52 kB
+Active(file):       6800 kB
+Inactive(file):      372 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:               120 kB
+Writeback:             0 kB
+AnonPages:         13700 kB
+Mapped:             4392 kB
+Shmem:                60 kB
+Slab:              29412 kB
+SReclaimable:      20004 kB
+SUnreclaim:         9408 kB
+KernelStack:        1408 kB
+PageTables:         2356 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:      509720 kB
+Committed_AS:      62876 kB
+VmallocTotal:   34359738367 kB
+VmallocUsed:        2488 kB
+VmallocChunk:   34359731159 kB
+AnonHugePages:         0 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+DirectMap4k:       22528 kB
+DirectMap2M:     1026048 kB
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ ecj[Kho "As you can see, the memory has freed up and the cache has disappeared"
+As you can see, the memory has freed up and the cache has disappeared
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ echo "This ladies and gentlemen has been the first installment on[K[Kin a series of Linux VM Subsystem experiments"
+This ladies and gentlemen has been the first installment in a series of Linux VM Subsystem experiments
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ Th[K[Kecho "The next installment will involve the interaction of the filesystem cache and anonymous memory increases"
+The next installment will involve the interaction of the filesystem cache and anonymous memory increases
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ echjo[K[K[Kho "Good night, back at work in 6 hours"
+Good night, back at work in 6 hours
+]0;ec2-user@ip-172-31-37-189:~/linux-systems-programming[ec2-user@ip-172-31-37-189 linux-systems-programming]$ d[Kexit
+
+Script done on Wed 02 Mar 2016 06:15:28 AM UTC
