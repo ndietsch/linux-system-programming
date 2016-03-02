@@ -1,0 +1,12 @@
+* This screencast is to demonstrate the cache eviction feature of the Linux Virtual Memory Management subsystem. 
+* In this example, our Perl code creates a 10MB file with DD and then reads it into a loop. 
+* The loop outputs three figures each time
+	- MemFree
+	- Active (File) which makes up the active part of the file cache
+	- Inactive (File) which makes up the inactive part of the file cache
+* As you can see from the /proc/meminfo output, we start with a relatively high amount of free memory on our 1GB system and a low amount of filesystem cache
+* With each loop, the free memory decreases by about 10MB and the Active file cache increases by about 10MB. 
+* Once we hit around 9-11MB free on the system, the VM subsystem automatically moves the cache from active to inactive where it is then evicted using the various algorithms
+* Please note that this is using Amazon Linux with Kernel 4.1.17-22.30.amzn1.x86_64 which will differ slightly from the internal Linux systems at ${work} but it demonstrates the point none the less.
+* The really cool bit is at the end when we delete all the files
+
